@@ -2,6 +2,7 @@
 import os
 import string
 import random
+import json
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 
@@ -9,12 +10,32 @@ class MyModel:
     """
     This is a starter model to get you started. Feel free to modify this file.
     """
+    def __init__(self):
+        self.unigram_probs = {}
 
     @classmethod
     def load_training_data(cls):
         # your code here
-        # this particular model doesn't train
-        return []
+        data = []
+        shakespeare_path = os.path.join(os.path.dirname(__file__), '..', 'shakespeare.txt')
+        if not os.path.exists(shakespeare_path):
+            shakespeare_path = 'shakespeare.txt'
+        if not os.path.exists(shakespeare_path):
+            shakespeare_path = os.path.join('data', 'shakespeare.txt')
+        
+        if not os.path.exists(shakespeare_path):
+            print(f'Warning: shakespeare.txt not found. Checked multiple locations.')
+            return []
+        
+        with open(shakespeare_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    data.append(line)
+        
+        print(f'Loaded {len(data)} lines from {shakespeare_path}')
+        return data
+
 
     @classmethod
     def load_test_data(cls, fname):
@@ -34,31 +55,53 @@ class MyModel:
 
     def run_train(self, data, work_dir):
         # your code here
-        pass
+        unigram_probs = {}
+        
+        for sentence in data:
+            for char in sentence:
+                if char in unigram_probs:
+                    unigram_probs[char] += 1
+                else:
+                    unigram_probs[char] = 1
+        
+        total_chars = sum(unigram_probs.values())
+        for char in unigram_probs:
+            unigram_probs[char] /= total_chars
+        self.unigram_probs = unigram_probs
+        
 
     def run_pred(self, data):
         # your code here
         preds = []
-        all_chars = string.ascii_letters
+        chars = list(self.unigram_probs.keys())
+        probs = list(self.unigram_probs.values())
+        
         for inp in data:
-            # this model just predicts a random character each time
-            top_guesses = [random.choice(all_chars) for _ in range(3)]
+            top_chars = sorted(self.unigram_probs.items(), key=lambda x: x[1], reverse=True)
+            top_guesses = [char for char, prob in top_chars[:3]]     
+            while len(top_guesses) < 3:
+                top_guesses.append(random.choice(chars))        
             preds.append(''.join(top_guesses))
+        
         return preds
 
     def save(self, work_dir):
         # your code here
-        # this particular model has nothing to save, but for demonstration purposes we will save a blank file
-        with open(os.path.join(work_dir, 'model.checkpoint'), 'wt') as f:
-            f.write('dummy save')
+        model_path = os.path.join(work_dir, 'model.checkpoint')
+        with open(model_path, 'w', encoding='utf-8') as f:
+            json.dump(self.unigram_probs, f, ensure_ascii=False, indent=2)
+        print(f'Saved model with {len(self.unigram_probs)} characters to {model_path}')
 
     @classmethod
     def load(cls, work_dir):
         # your code here
         # this particular model has nothing to load, but for demonstration purposes we will load a blank file
-        with open(os.path.join(work_dir, 'model.checkpoint')) as f:
-            dummy_save = f.read()
-        return MyModel()
+        model = cls()
+        model_path = os.path.join(work_dir, 'model.checkpoint')
+        with open(model_path, 'r', encoding='utf-8') as f:
+            model.unigram_probs = json.load(f)
+        print(f'Loaded model with {len(model.unigram_probs)} characters from {model_path}')
+        return model
 
 
 if __name__ == '__main__':
