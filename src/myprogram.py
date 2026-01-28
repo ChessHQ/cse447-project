@@ -83,11 +83,9 @@ class MyModel:
         
         for inp in data:
             sampled_chars = set()
-            i = 0
-            while i < 3:
+            while len(sampled_chars) < 3:
                 sampled_char = np.random.choice(chars, p=probs)
                 sampled_chars.add(sampled_char)
-                i += 1
             preds.append(''.join(sampled_chars))
         
         return preds
