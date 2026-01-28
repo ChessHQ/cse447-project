@@ -18,16 +18,8 @@ class MyModel:
     def load_training_data(cls):
         # your code here
         data = []
-        shakespeare_path = os.path.join(os.path.dirname(__file__), '..', 'shakespeare.txt')
-        if not os.path.exists(shakespeare_path):
-            shakespeare_path = 'shakespeare.txt'
-        if not os.path.exists(shakespeare_path):
-            shakespeare_path = os.path.join('data', 'shakespeare.txt')
-        
-        if not os.path.exists(shakespeare_path):
-            print(f'Warning: shakespeare.txt not found. Checked multiple locations.')
-            return []
-        
+        shakespeare_path = os.path.join(os.path.dirname(__file__), '.', 'shakespeare.txt')
+    
         with open(shakespeare_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -90,11 +82,11 @@ class MyModel:
         probs = list(self.unigram_probs.values())
         
         for inp in data:
-            sampled_chars = []
+            sampled_chars = set()
             i = 0
             while i < 3:
                 sampled_char = np.random.choice(chars, p=probs)
-                sampled_chars.append(sampled_char)
+                sampled_chars.add(sampled_char)
                 i += 1
             preds.append(''.join(sampled_chars))
         
