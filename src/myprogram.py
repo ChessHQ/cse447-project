@@ -32,7 +32,10 @@ class MyModel:
                 line = line.strip()
                 if line:
                     data.append(line)
-        
+        # For debugging
+        # print(f'Lines: {data[:5]}\n')
+        # print(f'Words: {words[:5]}\n')
+
         print(f'Loaded {len(data)} lines from {shakespeare_path}')
         return data
 
@@ -53,16 +56,23 @@ class MyModel:
             for p in preds:
                 f.write('{}\n'.format(p))
 
-    def run_train(self, data, work_dir):
+    def run_train(self, data: list[str], work_dir):
         # your code here
-        unigram_probs = {}
+        unigram_probs: dict[str, float] = {}
         
+        ''' 
+        Reason why we use lower case is to reduce the number of unique chars
+        For example, if there is a scenario where 'A' and 'a' both have high probability,
+        the model would return both of them out of the 3 guesses, which is not ideal.
+        '''
         for sentence in data:
+            sentence: str
             for char in sentence:
-                if char in unigram_probs:
-                    unigram_probs[char] += 1
+                lower_char = char.lower()
+                if lower_char in unigram_probs:
+                    unigram_probs[lower_char] += 1
                 else:
-                    unigram_probs[char] = 1
+                    unigram_probs[lower_char] = 1
         
         total_chars = sum(unigram_probs.values())
         for char in unigram_probs:
