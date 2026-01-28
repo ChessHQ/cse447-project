@@ -3,6 +3,7 @@ import os
 import string
 import random
 import json
+import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 
@@ -69,6 +70,8 @@ class MyModel:
             sentence: str
             for char in sentence:
                 lower_char = char.lower()
+                if lower_char == ' ':
+                    continue
                 if lower_char in unigram_probs:
                     unigram_probs[lower_char] += 1
                 else:
@@ -87,11 +90,13 @@ class MyModel:
         probs = list(self.unigram_probs.values())
         
         for inp in data:
-            top_chars = sorted(self.unigram_probs.items(), key=lambda x: x[1], reverse=True)
-            top_guesses = [char for char, prob in top_chars[:3]]     
-            while len(top_guesses) < 3:
-                top_guesses.append(random.choice(chars))        
-            preds.append(''.join(top_guesses))
+            sampled_chars = []
+            i = 0
+            while i < 3:
+                sampled_char = np.random.choice(chars, p=probs)
+                sampled_chars.append(sampled_char)
+                i += 1
+            preds.append(''.join(sampled_chars))
         
         return preds
 
