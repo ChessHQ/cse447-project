@@ -24,6 +24,10 @@ class MyModel(nn.Module):
         self.fc = None
         self.char2idx = {}
         self.idx2char = {}
+        self.vocab_size = 0
+        self.embed_size = 0
+        self.hidden_size = 0
+        self.num_layers = 0
 
     def forward(self, x, hidden):
         x = self.embed(x)
@@ -93,6 +97,10 @@ class MyModel(nn.Module):
         self.embed = nn.Embedding(vocab_size, embed_size)
         self.rnn = nn.RNN(embed_size, hidden_size, num_layers, batch_first = True)
         self.fc = nn.Linear(hidden_size, vocab_size)
+        self.vocab_size = vocab_size
+        self.embed_size = embed_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
 
         batch_size = 64
         seq_length = 100
@@ -130,6 +138,15 @@ class MyModel(nn.Module):
     def save(self, work_dir):
         # your code here
         model_path = os.path.join(work_dir, 'model.checkpoint')
+        torch.save({
+            'state_dict': self.state_dict(),
+            'char2idx': self.char2idx,
+            'idx2char': self.idx2char,
+            'vocab_size': self.vocab_size,
+            'embed_size': self.embed_size,
+            'hidden_size': self.hidden_size,
+            'num_layers': self.num_layers,
+        }, model_path)
 
     @classmethod
     def load(cls, work_dir):
@@ -137,7 +154,25 @@ class MyModel(nn.Module):
         # this particular model has nothing to load, but for demonstration purposes we will load a blank file
         model = cls()
         model_path = os.path.join(work_dir, 'model.checkpoint')
+        checkpoint = torch.load(model_path, map_location='cpu')
+
+        model = cls()
+
+        model.char2idx = checkpoint['char2idx']
+        model.idx2char = checkpoint['idx2char']
+        model.vocab_size = checkpoint['vocab_size']
+        model.embed_size = checkpoint['embed_size']
+        model.hidden_size = checkpoint['hidden_size']
+        model.num_layers = checkpoint['num_layers']
+        model.embed = nn.Embedding(model.vocab_size, model.embed_size)
+        model.rnn = nn.RNN(model.embed_size, model.hidden_size, model.num_layers, batch_first=True)
+        model.fc = nn.Linear(model.hidden_size, model.vocab_size)
+
+        model.load_state_dict(checkpoint['state_dict'])
+        model.eval()
+
         return model
+
     
     def generate_text(self, start_char, length, hidden):
         self.eval()
