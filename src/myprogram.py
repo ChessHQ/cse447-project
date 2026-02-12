@@ -3,44 +3,62 @@ import os
 import string
 import random
 import json
+from sysconfig import get_paths
 import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from datasets import load_dataset
+import torch
+import torch.nn as nn
 
+# Following tutorial: https://www.youtube.com/watch?v=Mqo7FwgWZFQ
+# Also this: https://docs.pytorch.org/tutorials/beginner/saving_loading_models.html
 
-class MyModel:
+class MyModel(nn.Module):
     """
     This is a starter model to get you started. Feel free to modify this file.
     """
     def __init__(self):
-        self.unigram_probs = {}
+        super(MyModel, self).__init__()
+        self.embed = None
+        self.rnn = None
+        self.fc = None
+        self.char2idx = {}
+        self.idx2char = {}
+
+    def forward(self, x, hidden):
+        x = self.embed(x)
+        out, hidden = self.rnn(x, hidden)
+        out = self.fc(out)
+        return out, hidden
 
     @classmethod
     def load_training_data(cls):
         # your code here
         data = []
-        """
-        shakespeare_path = os.path.join(os.path.dirname(__file__), '.', 'shakespeare.txt')
-    
-        with open(shakespeare_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    data.append(line)
-        """
 
-        ds = load_dataset("openlanguagedata/flores_plus", "eng_Latn", token="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", encoding='utf-8')
+        ds = load_dataset("openlanguagedata/flores_plus", "eng_Latn", token="", encoding='utf-8')
+        translator = str.maketrans('', '', string.punctuation)
         for line in ds["dev"]["text"]:
             line = line.strip()
+            line = line.translate(translator)
+            line = line.replace(" ", "")
             if line:
                 data.append(line)
-        # For debugging
-        # print(f'Lines: {data[:5]}\n')
-        # print(f'Words: {words[:5]}\n')
 
         print(f'Loaded {len(data)} lines from HuggingFace')
         return data
-
+    
+    
+    @classmethod
+    def get_batches(cls, data, batch_size):
+        n_batches = len(data) // (batch_size * 100)
+        data = data[:n_batches * batch_size * 100]
+        x = np.array(data)
+        y = np.roll(x, -1)
+        x = x.reshape(batch_size, -1)
+        y = y.reshape(batch_size, -1)
+        return x, y
+    
 
     @classmethod
     def load_test_data(cls, fname):
@@ -60,50 +78,58 @@ class MyModel:
 
     def run_train(self, data: list[str], work_dir):
         # your code here
-        unigram_probs: dict[str, float] = {}
-        
-        ''' 
-        Reason why we use lower case is to reduce the number of unique chars
-        For example, if there is a scenario where 'A' and 'a' both have high probability,
-        the model would return both of them out of the 3 guesses, which is not ideal.
-        '''
-        for sentence in data:
-            sentence: str
-            for char in sentence:
-                if char == ' ':
-                    continue
-                if char in unigram_probs:
-                    unigram_probs[char] += 1
-                else:
-                    unigram_probs[char] = 1
-        
-        total_chars = sum(unigram_probs.values())
-        for char in unigram_probs:
-            unigram_probs[char] /= total_chars
-        self.unigram_probs = unigram_probs
-        
+        text = ''.join(data)
+        chars = sorted(list(set(text)))
+        char2idx = {ch: idx for idx, ch in enumerate(chars)}
+        idx2char = {idx: ch for idx, ch in enumerate(chars)}
+        self.char2idx = char2idx
+        self.idx2char = idx2char
+        data = [char2idx[ch] for ch in text] 
+
+        vocab_size = len(chars)
+        embed_size = 128
+        hidden_size = 256
+        num_layers = 2
+        self.embed = nn.Embedding(vocab_size, embed_size)
+        self.rnn = nn.RNN(embed_size, hidden_size, num_layers, batch_first = True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+        batch_size = 64
+        seq_length = 100
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        epochs = 10
+
+        for epoch in range(epochs):
+            x, y = self.get_batches(data, batch_size)
+            hidden = None
+            for i in range(0, x.shape[1], seq_length):
+                inputs = torch.tensor(x[:, i:i+seq_length], dtype=torch.long)      
+                targets = torch.tensor(y[:, i:i+seq_length], dtype=torch.long)
+                optimizer.zero_grad()
+
+                if hidden is not None:
+                    hidden = hidden.detach()
+                outputs, hidden = self(inputs, hidden)
+                loss = criterion(outputs.view(-1, vocab_size), targets.view(-1))
+                loss.backward()
+                optimizer.step()
+            print(f'Epoch {epoch + 1}/{epochs}, loss: {loss.item():.5f}')
+       
 
     def run_pred(self, data):
         # your code here
         preds = []
-        chars = list(self.unigram_probs.keys())
-        probs = list(self.unigram_probs.values())
         
-        for inp in data:
-            sampled_chars = set()
-            while len(sampled_chars) < 3:
-                sampled_char = np.random.choice(chars, p=probs)
-                sampled_chars.add(sampled_char)
-            preds.append(''.join(sampled_chars))
+
+        for line in data:
+            preds.append(self.generate_text(line, 3, None))
         
         return preds
 
     def save(self, work_dir):
         # your code here
         model_path = os.path.join(work_dir, 'model.checkpoint')
-        with open(model_path, 'w', encoding='utf-8') as f:
-            json.dump(self.unigram_probs, f, ensure_ascii=False, indent=2)
-        print(f'Saved model with {len(self.unigram_probs)} characters to {model_path}')
 
     @classmethod
     def load(cls, work_dir):
@@ -111,10 +137,19 @@ class MyModel:
         # this particular model has nothing to load, but for demonstration purposes we will load a blank file
         model = cls()
         model_path = os.path.join(work_dir, 'model.checkpoint')
-        with open(model_path, 'r', encoding='utf-8') as f:
-            model.unigram_probs = json.load(f)
-        print(f'Loaded model with {len(model.unigram_probs)} characters from {model_path}')
         return model
+    
+    def generate_text(self, start_char, length, hidden):
+        self.eval()
+        input = torch.tensor([self.char2idx[start_char]], dtype = torch.long).unsqueeze(0)
+        generated = start_char
+        for _ in range(length):
+            output, hidden = self(input, hidden)
+            prob = nn.functional.softmax(output[-1], dim=-1).data
+            char_idx = torch.multinomial(prob, 1).item()
+            generated += self.idx2char[char_idx]
+            input = torch.tensor([[char_idx]], dtype= torch.long)
+        return generated
 
 
 if __name__ == '__main__':
