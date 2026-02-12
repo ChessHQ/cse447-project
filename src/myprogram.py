@@ -5,6 +5,7 @@ import random
 import json
 import numpy as np
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from datasets import load_dataset
 
 
 class MyModel:
@@ -18,6 +19,7 @@ class MyModel:
     def load_training_data(cls):
         # your code here
         data = []
+        """
         shakespeare_path = os.path.join(os.path.dirname(__file__), '.', 'shakespeare.txt')
     
         with open(shakespeare_path, 'r', encoding='utf-8') as f:
@@ -25,11 +27,18 @@ class MyModel:
                 line = line.strip()
                 if line:
                     data.append(line)
+        """
+
+        ds = load_dataset("openlanguagedata/flores_plus", "eng_Latn", token="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", encoding='utf-8')
+        for line in ds["dev"]["text"]:
+            line = line.strip()
+            if line:
+                data.append(line)
         # For debugging
         # print(f'Lines: {data[:5]}\n')
         # print(f'Words: {words[:5]}\n')
 
-        print(f'Loaded {len(data)} lines from {shakespeare_path}')
+        print(f'Loaded {len(data)} lines from HuggingFace')
         return data
 
 
@@ -61,13 +70,12 @@ class MyModel:
         for sentence in data:
             sentence: str
             for char in sentence:
-                lower_char = char.lower()
-                if lower_char == ' ':
+                if char == ' ':
                     continue
-                if lower_char in unigram_probs:
-                    unigram_probs[lower_char] += 1
+                if char in unigram_probs:
+                    unigram_probs[char] += 1
                 else:
-                    unigram_probs[lower_char] = 1
+                    unigram_probs[char] = 1
         
         total_chars = sum(unigram_probs.values())
         for char in unigram_probs:
