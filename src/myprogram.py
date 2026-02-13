@@ -174,14 +174,30 @@ class MyModel(nn.Module):
         return model
 
     
-    def generate_text(self, start_char, length, hidden):
+    def generate_text(self, prefix, length, hidden):
         self.eval()
-        input = torch.tensor([self.char2idx[start_char]], dtype = torch.long).unsqueeze(0)
-        generated = start_char
+
+        if hidden is None:
+            hidden = torch.zeros(self.num_layers, 1, self.hidden_size)
+
+        generated = prefix
+
+        for char in prefix:
+            if char not in self.char2idx:
+                continue
+            input = torch.tensor([[self.char2idx[char]]], dtype=torch.long)
+            output, hidden = self(input, hidden)
+
+        last_char = prefix[-1]
+        if last_char not in self.char2idx:
+            last_char = random.choice(list(self.char2idx.keys()))
+        input = torch.tensor([[self.char2idx[last_char]]], dtype=torch.long)
+
         for _ in range(length):
             output, hidden = self(input, hidden)
             prob = nn.functional.softmax(output[-1], dim=-1).data
             char_idx = torch.multinomial(prob, 1).item()
+
             generated += self.idx2char[char_idx]
             input = torch.tensor([[char_idx]], dtype= torch.long)
         return generated
