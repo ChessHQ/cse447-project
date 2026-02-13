@@ -180,7 +180,7 @@ class MyModel(nn.Module):
         if hidden is None:
             hidden = torch.zeros(self.num_layers, 1, self.hidden_size)
 
-        generated = ''
+        generated = set()
 
         for char in prefix:
             if char not in self.char2idx:
@@ -193,14 +193,14 @@ class MyModel(nn.Module):
             last_char = random.choice(list(self.char2idx.keys()))
         input = torch.tensor([[self.char2idx[last_char]]], dtype=torch.long)
 
-        for _ in range(length):
+        while len(generated) < length:
             output, hidden = self(input, hidden)
             prob = nn.functional.softmax(output[-1], dim=-1).data
             char_idx = torch.multinomial(prob, 1).item()
 
-            generated += self.idx2char[char_idx]
+            generated.add(self.idx2char[char_idx])
             input = torch.tensor([[char_idx]], dtype= torch.long)
-        return generated
+        return ''.join(generated)
 
 
 if __name__ == '__main__':
