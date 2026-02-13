@@ -180,7 +180,7 @@ class MyModel(nn.Module):
         if hidden is None:
             hidden = torch.zeros(self.num_layers, 1, self.hidden_size)
 
-        generated = prefix
+        generated = ''
 
         for char in prefix:
             if char not in self.char2idx:
