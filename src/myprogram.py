@@ -180,16 +180,20 @@ class MyModel(nn.Module):
         self.eval()
         hidden = None
 
+        output = None
+
         if prefix:
             for ch in prefix:
                 if ch not in self.char2idx:
                     continue
                 inp = torch.tensor([[self.char2idx[ch]]], dtype=torch.long).to(self.device)
                 output, hidden = self(inp, hidden)
+            if output is None:
+                inp = torch.tensor([[random.choice(list(self.char2idx.values()))]], dtype=torch.long).to(self.device)
+                output, hidden = self(inp, hidden)
         else:
             inp = torch.tensor([[random.choice(list(self.char2idx.values()))]], dtype=torch.long).to(self.device)
             output, hidden = self(inp, hidden)
-
         logits = output[:, -1, :]
         topk_indices = torch.topk(logits, k=length).indices[0].tolist()
         topk_chars = [self.idx2char[idx] for idx in topk_indices]
