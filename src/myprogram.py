@@ -17,7 +17,7 @@ class MyModel(nn.Module):
     """
     This is a starter model to get you started. Feel free to modify this file.
     """
-    def __init__(self, vocab_size, embed_size=128, hidden_size=512, num_layers=2):
+    def __init__(self, vocab_size, embed_size=128, hidden_size=512, num_layers=2, dropout=0.1):
         super(MyModel, self).__init__()
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,7 +28,7 @@ class MyModel(nn.Module):
         self.num_layers = num_layers
 
         self.embed = nn.Embedding(vocab_size, embed_size)
-        self.rnn = nn.GRU(embed_size, hidden_size, num_layers, batch_first=True)
+        self.rnn = nn.GRU(embed_size, hidden_size, num_layers, batch_first=True, dropout=dropout)
         self.fc = nn.Linear(hidden_size, vocab_size)
 
         self.to(self.device)
@@ -61,15 +61,15 @@ class MyModel(nn.Module):
         return data
     
     
-    @classmethod
-    def get_batches(cls, data, batch_size):
-        n_batches = len(data) // (batch_size * 100)
-        data = data[:n_batches * batch_size * 100]
-        x = np.array(data)
-        y = np.roll(x, -1)
-        x = x.reshape(batch_size, -1)
-        y = y.reshape(batch_size, -1)
-        return x, y
+    def batch_generator(self, data, batch_size, seq_length):
+        n_batches = data.size(0) // (batch_size * seq_length)
+        data = data[:n_batches * batch_size * seq_length]
+        data = data.view(batch_size, -1)
+
+        for i in range(0, data.size(1) - seq_length, seq_length):
+            inputs = data[:, i:i+seq_length].to(self.device)
+            targets = data[:, i+1:i+seq_length+1].to(self.device)
+            yield inputs, targets    
     
 
     @classmethod
@@ -96,35 +96,33 @@ class MyModel(nn.Module):
 
         batch_size = 64
         seq_length = 100
-        epochs = 10
+        epochs = 25
+        lr = 0.001
 
         criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
         for epoch in range(epochs):
             total_loss = 0
             total_chars = 0
-           
-            for i in range(0, len(encoded) - seq_length, seq_length):
-               inputs = encoded[i:i+seq_length].unsqueeze(0).to(self.device)
-               targets = encoded[i+1:i+seq_length+1].unsqueeze(0).to(self.device)
 
-               optimizer.zero_grad()
+            for inputs, targets in self.batch_generator(encoded, batch_size, seq_length):
+                optimizer.zero_grad()
+                outputs, _ = self(inputs)
 
-               outputs, _ = self(inputs)
+                loss = criterion(outputs.view(-1, self.vocab_size), targets.reshape(-1))
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.parameters(), 5)
+                optimizer.step()
 
-               loss = criterion(outputs.view(-1, self.vocab_size), targets.view(-1))
-
-               loss.backward()
-               torch.nn.utils.clip_grad_norm_(self.parameters(), 5)
-               optimizer.step()
-
-               total_loss += loss.item() * targets.numel()
-               total_chars += targets.numel()
+                total_loss += loss.item() * targets.numel()
+                total_chars += targets.numel()
 
             mean_loss = total_loss / total_chars            
             print(f'Epoch {epoch+1}/{epochs}, Loss: {mean_loss:.4f}') 
-    
+            scheduler.step()
         self.save(work_dir)
         print(f'Model saved to {work_dir}')
 
@@ -222,7 +220,7 @@ if __name__ == '__main__':
         vocab_size = len(chars)
 
         print('Instatiating model')
-        model = MyModel(vocab_size=vocab_size, embed_size=128, hidden_size=384, num_layers=1)
+        model = MyModel(vocab_size=vocab_size)
 
         print('Training')
         model.run_train(train_data, args.work_dir)
